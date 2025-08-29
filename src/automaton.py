@@ -91,21 +91,50 @@ class LevenshteinDfa(dict):
 
 
 class LevenshteinAutomaton:
-    def __init__(self, d: int):
+    def __init__(self, query: str, d: int, dfa: LevenshteinDfa):
+        self.query = query
         self.d = d
-        self.dfa = LevenshteinDfa(d)
+        self.dfa = dfa
+        self._characteristic_vector_cache = {}
 
-    def _characteristic_vector(self, query: str, char: str, offset: int):
-        return tuple(
-            query[offset + i] == char if offset + i < len(query) else False
-            for i in range(2 * self.d + 1)
-        )
+    def _characteristic_vector(self, char: str, offset: int):
+        key = (char, offset)
+        if key not in self._characteristic_vector_cache:
+            self._characteristic_vector_cache[key] = tuple(
+                (
+                    self.query[offset + i] == char
+                    if offset + i < len(self.query)
+                    else False
+                )
+                for i in range(2 * self.d + 1)
+            )
+
+        return self._characteristic_vector_cache[key]
 
     def initial_state(self):
         offset, state = self.dfa.normalize(self.dfa.initial_state(self.d))
         return LevenshteinDfaState(offset=offset, state=state)
 
-    def step(self, query: str, char: str, state: LevenshteinDfaState):
-        vec = self._characteristic_vector(query, char, state.offset)
+    def step(self, char: str, state: LevenshteinDfaState):
+        vec = self._characteristic_vector(char, state.offset)
         shift, next_state = self.dfa[state.state][vec]
         return LevenshteinDfaState(offset=state.offset + shift, state=next_state)
+
+    def is_match(self, state: LevenshteinDfaState):
+        for offset, d in state.state:
+            if len(self.query) - (state.offset + offset) <= d:
+                return True
+
+        return False
+
+    def can_match(self, state: LevenshteinDfaState):
+        return len(state.state) > 0
+
+
+class LevenshteinAutomatonBuilder:
+    def __init__(self, d: int):
+        self.d = d
+        self.dfa = LevenshteinDfa(d)
+
+    def get(self, query: str):
+        return LevenshteinAutomaton(query, self.d, self.dfa)
