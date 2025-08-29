@@ -1,12 +1,11 @@
-from automaton import LevenshteinAutomaton, LevenshteinDfaState
+from .automaton import LevenshteinAutomaton, LevenshteinDfaState
 from dataclasses import dataclass, field
-from typing import Self
 
 
 @dataclass
 class Node:
     end: bool = False  # indicate word end
-    nodes: dict[str, Self] = field(default_factory=dict)
+    nodes: dict = field(default_factory=dict)
 
 
 @dataclass
