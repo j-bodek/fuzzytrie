@@ -1,3 +1,4 @@
+from automaton import LevenshteinAutomaton, LevenshteinDfaState
 from dataclasses import dataclass, field
 from typing import Self
 
@@ -17,7 +18,10 @@ class Trie:
 
         for i, c in enumerate(word):
             if c not in nodes:
-                nodes[c] = Node(end=i == len(word) - 1)
+                nodes[c] = Node()
+
+            if len(word) - 1 == i:
+                nodes[c].end = True
 
             nodes = nodes[c].nodes
 
@@ -46,3 +50,26 @@ class Trie:
                 break
 
             del nodes[c]
+
+    def fuzzy_search(self, automaton: LevenshteinAutomaton):
+        state = automaton.initial_state()
+        for m in self._fuzzy_search(state, self.nodes, automaton):
+            yield m
+
+    def _fuzzy_search(
+        self,
+        state: LevenshteinDfaState,
+        nodes: dict[str, Node],
+        automaton: LevenshteinAutomaton,
+    ):
+        for char, node in nodes.items():
+            new_state = automaton.step(char, state)
+            # print(char, new_state)
+            if not automaton.can_match(new_state):
+                continue
+
+            if node.end and automaton.is_match(new_state):
+                yield char
+
+            for m in self._fuzzy_search(new_state, node.nodes, automaton):
+                yield char + m
