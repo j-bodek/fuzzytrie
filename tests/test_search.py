@@ -1,6 +1,6 @@
 import pytest
 from helpers.search import get_lines, timeit, automaton_matches, brute_force_matches
-from src import LevenshteinAutomatonBuilder, Trie
+from fuzzytrie import LevenshteinAutomatonBuilder, Trie
 
 
 @pytest.fixture
@@ -14,7 +14,6 @@ def queries():
 
 
 def test_automaton(queries, words):
-    # queries = queries[:10]
     # edit distance = 2
     d = 2
     builder = LevenshteinAutomatonBuilder(d)
