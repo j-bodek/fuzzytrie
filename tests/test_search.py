@@ -14,6 +14,7 @@ def queries():
 
 
 def test_automaton(queries, words):
+    # queries = queries[:10]
     # edit distance = 2
     d = 2
     builder = LevenshteinAutomatonBuilder(d)

@@ -36,36 +36,25 @@ class LevenshteinDfa(dict):
         # width of characteristic vector is equal to 2d + 1
         return list(itertools.product((True, False), repeat=width))
 
+    def _get_index(self, vec, offset, val):
+        try:
+            return vec.index(val, offset) - offset
+        except ValueError:
+            return -1
+
     def _transitions(self, vec, s):
         offset, d = s
-        yield (offset, d - 1)  # deletion
-        yield (offset + 1, d - 1)  # substitution
-        # insertion until character match
-        for i, val in enumerate(vec[offset:]):
-            if val:
-                yield offset + i + 1, d - i
 
-    def _is_state_redundant(self, s: tuple, state: tuple[tuple]):
-        offset, d = s
-        if d < 0:
-            return True
-
-        for s2 in state:
-            offset_2, d_2 = s2
-            # if state can be achived by changing characters between state2
-            # with same or less modifications "d" it is redundant
-            if s != s2 and d_2 - d >= abs(offset_2 - offset):
-                return True
-
-        return False
-
-    def _remove_redundant_states(self, state: tuple[tuple]):
-        """
-        Remove all states that are redundant (used all modification steps,
-        same outcome can be achived by replacing characters from other state)
-        """
-
-        return set(s for s in state if not self._is_state_redundant(s, state))
+        if vec[offset] == 1:
+            return ((offset + 1, d),)
+        elif (index := self._get_index(vec, offset, True)) != -1:
+            return (
+                (offset, d - 1),
+                (offset + 1, d - 1),
+                (offset + index + 1, d - index),
+            )
+        else:
+            return ((offset, d - 1), (offset + 1, d - 1))
 
     def _step(self, vec: tuple[bool], state: tuple[tuple]):
         next_states = set()
@@ -73,7 +62,8 @@ class LevenshteinDfa(dict):
             # hashset union
             next_states |= set(self._transitions(vec, s))
 
-        return self._remove_redundant_states(next_states)
+        # remove states with remaining edit distance less then 0
+        return set(s for s in next_states if s[1] >= 0)
 
     def initial_state(self, d: int):
         return {(0, d)}
