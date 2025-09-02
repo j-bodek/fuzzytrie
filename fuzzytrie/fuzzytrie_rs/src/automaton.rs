@@ -1,8 +1,9 @@
+use pyo3::prelude::*;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::vec::Vec;
 
-#[derive(Clone, Hash)]
+#[derive(Debug, Ord, PartialOrd, Clone, Hash)]
 struct State(u32, i32);
 
 impl PartialEq for State {
@@ -13,32 +14,41 @@ impl PartialEq for State {
 
 impl Eq for State {}
 
+#[pyclass(name = "LevenshteinDfaState")]
 struct LevenshteinDfaState {
     offset: u32,
     states: Vec<State>,
+}
+
+#[pymethods]
+impl LevenshteinDfaState {
+    fn str(&self) -> String {
+        format!("({}, {:?})", self.offset, self.states)
+    }
 }
 
 struct LevenshteinDfa {
     dfa: HashMap<Vec<State>, HashMap<Vec<bool>, LevenshteinDfaState>>,
 }
 
+#[pyclass(name = "LevenshteinAutomaton")]
 struct LevenshteinAutomaton {
     query: String,
     d: u8,
-    // TODO: change to smart pointer that pyo3 respects
-    dfa: Rc<LevenshteinDfa>,
+    dfa: Arc<LevenshteinDfa>,
 }
 
-struct LevenshteinAutomatonBuilder {
+#[pyclass(name = "LevenshteinAutomatonBuilder")]
+pub struct LevenshteinAutomatonBuilder {
     d: u8,
-    dfa: Rc<LevenshteinDfa>,
+    dfa: Arc<LevenshteinDfa>,
 }
 
 impl LevenshteinDfa {
     fn new(d: u8) -> Self {
         let mut dfa: HashMap<Vec<State>, HashMap<Vec<bool>, LevenshteinDfaState>> = HashMap::new();
 
-        let state = Self::normalize(Self::initial_state(d));
+        let state = Self::initial_state(d);
         let char_vectors = Self::get_characteristic_vectors(2 * d + 1);
 
         dfa.insert(state.states.clone(), HashMap::new());
@@ -71,8 +81,8 @@ impl LevenshteinDfa {
 
             let mut new_vectors: Vec<Vec<bool>> = Vec::new();
             for v in vectors.into_iter() {
-                new_vectors.push(vec![true].into_iter().chain(v.clone()).collect());
-                new_vectors.push(vec![false].into_iter().chain(v).collect());
+                new_vectors.push(v.clone().into_iter().chain(vec![true]).collect());
+                new_vectors.push(v.into_iter().chain(vec![false]).collect());
             }
 
             create(new_vectors, depth + 1, max)
@@ -83,9 +93,12 @@ impl LevenshteinDfa {
     }
 
     fn transitions(vector: &Vec<bool>, state: &State) -> Vec<State> {
-        match &vector.iter().position(|x| *x == true) {
+        match &vector[state.0 as usize..vector.len()]
+            .iter()
+            .position(|x| *x == true)
+        {
             Some(index) => {
-                if *index == 1 {
+                if *index as u32 == 0 {
                     return vec![State(state.0 + 1, state.1)];
                 } else {
                     return vec![
@@ -115,13 +128,13 @@ impl LevenshteinDfa {
         next_states
     }
 
-    fn initial_state(d: u8) -> Vec<State> {
-        vec![State(0, d as i32)]
+    fn initial_state(d: u8) -> LevenshteinDfaState {
+        Self::normalize(vec![State(0, d as i32)])
     }
 
     fn normalize(states: Vec<State>) -> LevenshteinDfaState {
         if states.len() == 0 {
-            LevenshteinDfaState {
+            return LevenshteinDfaState {
                 offset: 0,
                 states: Vec::new(),
             };
@@ -138,7 +151,8 @@ impl LevenshteinDfa {
             .map(|s| State(s.0 - min_offset, s.1))
             .collect();
 
-        states.sort_by(|s1, s2| s2.0.cmp(&s1.0));
+        states.sort_by(|s1, s2| s1.cmp(&s2));
+        // states.sort_by_key(|s| s.0);
 
         LevenshteinDfaState {
             offset: min_offset,
@@ -148,24 +162,84 @@ impl LevenshteinDfa {
 }
 
 impl LevenshteinAutomaton {
-    fn new(query: String, d: u8, dfa: Rc<LevenshteinDfa>) -> Self {
+    fn new(query: String, d: u8, dfa: Arc<LevenshteinDfa>) -> Self {
         Self {
             query: query,
             d: d,
             dfa: dfa,
         }
     }
+
+    fn characteristic_vector(&self, c: char, offset: u32) -> Vec<bool> {
+        let mut vec: Vec<bool> = vec![];
+        for i in offset..(2 * self.d as u32 + 1 + offset) {
+            vec.push(if i as usize <= self.query.len() {
+                self.query.chars().nth(i as usize) == Some(c)
+            } else {
+                false
+            });
+        }
+
+        vec
+    }
 }
 
-impl LevenshteinAutomatonBuilder {
-    fn new(d: u8) -> Self {
-        Self {
-            d: d,
-            dfa: Rc::new(LevenshteinDfa::new(d)),
+#[pymethods]
+impl LevenshteinAutomaton {
+    fn initial_state(&self) -> PyResult<LevenshteinDfaState> {
+        Ok(LevenshteinDfa::initial_state(self.d))
+    }
+
+    fn step(&self, c: char, state: &LevenshteinDfaState) -> PyResult<LevenshteinDfaState> {
+        let vec = self.characteristic_vector(c, state.offset);
+        match self.dfa.as_ref().dfa.get(&state.states) {
+            Some(transitions) => match transitions.get(&vec) {
+                Some(next_state) => Ok(LevenshteinDfaState {
+                    offset: state.offset + next_state.offset,
+                    states: next_state.states.clone(),
+                }),
+                None => Ok(LevenshteinDfaState {
+                    offset: 0,
+                    states: vec![],
+                }),
+            },
+            None => Ok(LevenshteinDfaState {
+                offset: 0,
+                states: vec![],
+            }),
         }
     }
 
-    fn get(&self, query: String) -> LevenshteinAutomaton {
-        LevenshteinAutomaton::new(query, self.d, Rc::clone(&self.dfa))
+    fn is_match(&self, state: &LevenshteinDfaState) -> PyResult<bool> {
+        for s in state.states.iter() {
+            if self.query.len() as i32 - (state.offset + s.0) as i32 <= s.1 {
+                return Ok(true);
+            }
+        }
+
+        return Ok(false);
+    }
+
+    fn can_match(&self, state: &LevenshteinDfaState) -> PyResult<bool> {
+        Ok(state.states.len() > 0)
+    }
+}
+
+#[pymethods]
+impl LevenshteinAutomatonBuilder {
+    #[new]
+    fn new(d: u8) -> Self {
+        Self {
+            d: d,
+            dfa: Arc::new(LevenshteinDfa::new(d)),
+        }
+    }
+
+    fn get(&self, query: String) -> PyResult<LevenshteinAutomaton> {
+        Ok(LevenshteinAutomaton::new(
+            query,
+            self.d,
+            Arc::clone(&self.dfa),
+        ))
     }
 }
