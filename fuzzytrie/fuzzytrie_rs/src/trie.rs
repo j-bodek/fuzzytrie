@@ -4,7 +4,6 @@ use std::collections::HashMap;
 
 struct Node {
     is_word: bool,
-    word: Option<String>,
     nodes: Vec<(char, Node)>,
 }
 
@@ -15,10 +14,9 @@ pub struct Trie {
 }
 
 impl Node {
-    fn new(is_word: bool, word: Option<String>) -> Self {
+    fn new(is_word: bool) -> Self {
         Self {
             is_word: is_word,
-            word: word,
             nodes: Vec::new(),
         }
     }
@@ -47,14 +45,7 @@ impl Trie {
                     nodes = &mut nodes[index].1.nodes;
                 }
                 Err(index) => {
-                    let node = Node::new(
-                        i == word.len() - 1,
-                        if i == word.len() - 1 {
-                            Some(word.clone())
-                        } else {
-                            None
-                        },
-                    );
+                    let node = Node::new(i == word.len() - 1);
                     nodes.insert(index, (c, node));
                     nodes = &mut nodes[index].1.nodes;
                 }
@@ -67,9 +58,7 @@ impl Trie {
             Some(builder) => {
                 let mut automaton = builder.get(query);
                 let state = automaton.initial_state();
-                let mut matches = vec![];
-                self._search(&mut matches, &self.nodes, &state, &mut automaton);
-                Ok(matches)
+                Ok(self._search(&self.nodes, &state, &mut automaton))
             }
             None => Ok(vec![]),
         }
@@ -79,11 +68,11 @@ impl Trie {
 impl Trie {
     fn _search(
         &self,
-        matches: &mut Vec<String>,
         nodes: &Vec<(char, Node)>,
         state: &LevenshteinDfaState,
         automaton: &mut LevenshteinAutomaton,
-    ) {
+    ) -> Vec<String> {
+        let mut matches: Vec<String> = vec![];
         for (c, node) in nodes.iter() {
             let new_state = automaton.step(*c, &state);
             if !automaton.can_match(&new_state) {
@@ -91,10 +80,15 @@ impl Trie {
             }
 
             if node.is_word && automaton.is_match(&new_state) {
-                matches.push(node.word.as_ref().unwrap().clone());
+                matches.push(c.to_string());
             }
 
-            self._search(matches, &node.nodes, &new_state, automaton);
+            for mut m in self._search(&node.nodes, &new_state, automaton) {
+                m.insert(0, *c);
+                matches.push(m);
+            }
         }
+
+        matches
     }
 }
