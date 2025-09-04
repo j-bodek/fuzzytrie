@@ -17,6 +17,7 @@ impl Eq for State {}
 #[pyclass(name = "LevenshteinDfaState")]
 struct LevenshteinDfaState {
     offset: u32,
+    max_shift: u32,
     states: Vec<State>,
 }
 
@@ -138,6 +139,7 @@ impl LevenshteinDfa {
         if states.len() == 0 {
             return LevenshteinDfaState {
                 offset: 0,
+                max_shift: 0,
                 states: Vec::new(),
             };
         }
@@ -154,10 +156,20 @@ impl LevenshteinDfa {
             .collect();
 
         states.sort_by(|s1, s2| s1.cmp(&s2));
-        // states.sort_by_key(|s| s.0);
+
+        let max_shift = states
+            .iter()
+            .fold(states[0].0 as i32 + states[0].1, |offset, state| {
+                if offset > state.0 as i32 + state.1 {
+                    offset
+                } else {
+                    state.0 as i32 + state.1
+                }
+            });
 
         LevenshteinDfaState {
             offset: min_offset,
+            max_shift: max_shift as u32,
             states: states,
         }
     }
@@ -184,12 +196,10 @@ impl LevenshteinAutomaton {
     }
 
     fn get_characteristic_vector(&self, c: char, offset: u32) -> &[bool] {
-        if self.query.contains(c) {
-            return &self.characteristic_vector_cache.get(&c).unwrap()
-                [offset as usize..(offset + 2 * self.d as u32 + 1) as usize];
-        } else {
-            return &self.empty_vector[..];
-        };
+        match self.characteristic_vector_cache.get(&c) {
+            Some(vec) => return &vec[offset as usize..(offset + 2 * self.d as u32 + 1) as usize],
+            None => return &self.empty_vector[..],
+        }
     }
 }
 
@@ -200,36 +210,32 @@ impl LevenshteinAutomaton {
     }
 
     fn step(&mut self, c: char, state: &LevenshteinDfaState) -> PyResult<LevenshteinDfaState> {
-        self.create_characteristic_vector(c, state.offset);
+        self.create_characteristic_vector(c);
         let vec = self.get_characteristic_vector(c, state.offset);
 
         match self.dfa.as_ref().dfa.get(&state.states) {
             Some(transitions) => match transitions.get(vec) {
                 Some(next_state) => Ok(LevenshteinDfaState {
                     offset: state.offset + next_state.offset,
+                    max_shift: next_state.max_shift,
                     states: next_state.states.clone(),
                 }),
                 None => Ok(LevenshteinDfaState {
                     offset: 0,
+                    max_shift: 0,
                     states: vec![],
                 }),
             },
             _ => Ok(LevenshteinDfaState {
                 offset: 0,
+                max_shift: 0,
                 states: vec![],
             }),
         }
     }
 
     fn is_match(&self, state: &LevenshteinDfaState) -> PyResult<bool> {
-        // improve this function by storing max_shift/max_offset of states in LevenshteinDfaState
-        for s in state.states.iter() {
-            if self.query.len() as i32 - (state.offset + s.0) as i32 <= s.1 {
-                return Ok(true);
-            }
-        }
-
-        return Ok(false);
+        return Ok(self.query.len() as i32 - state.offset as i32 <= state.max_shift as i32);
     }
 
     fn can_match(&self, state: &LevenshteinDfaState) -> PyResult<bool> {
