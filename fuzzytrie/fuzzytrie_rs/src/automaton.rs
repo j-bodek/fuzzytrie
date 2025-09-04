@@ -1,4 +1,3 @@
-use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -14,26 +13,17 @@ impl PartialEq for State {
 
 impl Eq for State {}
 
-#[pyclass(name = "LevenshteinDfaState")]
-struct LevenshteinDfaState {
+pub struct LevenshteinDfaState {
     offset: u32,
     max_shift: u32,
     states: Vec<State>,
-}
-
-#[pymethods]
-impl LevenshteinDfaState {
-    fn str(&self) -> String {
-        format!("({}, {:?})", self.offset, self.states)
-    }
 }
 
 struct LevenshteinDfa {
     dfa: HashMap<Vec<State>, HashMap<Vec<bool>, LevenshteinDfaState>>,
 }
 
-#[pyclass(name = "LevenshteinAutomaton")]
-struct LevenshteinAutomaton {
+pub struct LevenshteinAutomaton {
     query: String,
     d: u8,
     dfa: Arc<LevenshteinDfa>,
@@ -41,7 +31,6 @@ struct LevenshteinAutomaton {
     characteristic_vector_cache: HashMap<char, Vec<bool>>,
 }
 
-#[pyclass(name = "LevenshteinAutomatonBuilder")]
 pub struct LevenshteinAutomatonBuilder {
     d: u8,
     dfa: Arc<LevenshteinDfa>,
@@ -203,61 +192,54 @@ impl LevenshteinAutomaton {
     }
 }
 
-#[pymethods]
 impl LevenshteinAutomaton {
-    fn initial_state(&self) -> PyResult<LevenshteinDfaState> {
-        Ok(LevenshteinDfa::initial_state(self.d))
+    pub fn initial_state(&self) -> LevenshteinDfaState {
+        LevenshteinDfa::initial_state(self.d)
     }
 
-    fn step(&mut self, c: char, state: &LevenshteinDfaState) -> PyResult<LevenshteinDfaState> {
+    pub fn step(&mut self, c: char, state: &LevenshteinDfaState) -> LevenshteinDfaState {
         self.create_characteristic_vector(c);
         let vec = self.get_characteristic_vector(c, state.offset);
 
         match self.dfa.as_ref().dfa.get(&state.states) {
             Some(transitions) => match transitions.get(vec) {
-                Some(next_state) => Ok(LevenshteinDfaState {
+                Some(next_state) => LevenshteinDfaState {
                     offset: state.offset + next_state.offset,
                     max_shift: next_state.max_shift,
                     states: next_state.states.clone(),
-                }),
-                None => Ok(LevenshteinDfaState {
+                },
+                None => LevenshteinDfaState {
                     offset: 0,
                     max_shift: 0,
                     states: vec![],
-                }),
+                },
             },
-            _ => Ok(LevenshteinDfaState {
+            _ => LevenshteinDfaState {
                 offset: 0,
                 max_shift: 0,
                 states: vec![],
-            }),
+            },
         }
     }
 
-    fn is_match(&self, state: &LevenshteinDfaState) -> PyResult<bool> {
-        return Ok(self.query.len() as i32 - state.offset as i32 <= state.max_shift as i32);
+    pub fn is_match(&self, state: &LevenshteinDfaState) -> bool {
+        self.query.len() as i32 - state.offset as i32 <= state.max_shift as i32
     }
 
-    fn can_match(&self, state: &LevenshteinDfaState) -> PyResult<bool> {
-        Ok(state.states.len() > 0)
+    pub fn can_match(&self, state: &LevenshteinDfaState) -> bool {
+        state.states.len() > 0
     }
 }
 
-#[pymethods]
 impl LevenshteinAutomatonBuilder {
-    #[new]
-    fn new(d: u8) -> Self {
+    pub fn new(d: u8) -> Self {
         Self {
             d: d,
             dfa: Arc::new(LevenshteinDfa::new(d)),
         }
     }
 
-    fn get(&self, query: String) -> PyResult<LevenshteinAutomaton> {
-        Ok(LevenshteinAutomaton::new(
-            query,
-            self.d,
-            Arc::clone(&self.dfa),
-        ))
+    pub fn get(&self, query: String) -> LevenshteinAutomaton {
+        LevenshteinAutomaton::new(query, self.d, Arc::clone(&self.dfa))
     }
 }
