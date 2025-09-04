@@ -5,13 +5,13 @@ use std::collections::HashMap;
 struct Node {
     is_word: bool,
     word: Option<String>,
-    nodes: HashMap<char, Node>,
+    nodes: Vec<(char, Node)>,
 }
 
 #[pyclass(name = "Trie")]
 pub struct Trie {
     automaton_builders: HashMap<u8, LevenshteinAutomatonBuilder>,
-    nodes: HashMap<char, Node>,
+    nodes: Vec<(char, Node)>,
 }
 
 impl Node {
@@ -19,7 +19,7 @@ impl Node {
         Self {
             is_word: is_word,
             word: word,
-            nodes: HashMap::new(),
+            nodes: Vec::new(),
         }
     }
 }
@@ -30,7 +30,7 @@ impl Trie {
     fn new() -> Self {
         Self {
             automaton_builders: HashMap::new(),
-            nodes: HashMap::new(),
+            nodes: Vec::new(),
         }
     }
 
@@ -42,20 +42,23 @@ impl Trie {
     fn add(&mut self, word: String) {
         let mut nodes = &mut self.nodes;
         for (i, c) in word.chars().enumerate() {
-            if !nodes.contains_key(&c) {
-                nodes.insert(
-                    c,
-                    Node::new(
+            match nodes.binary_search_by(|t| t.0.cmp(&c)) {
+                Ok(index) => {
+                    nodes = &mut nodes[index].1.nodes;
+                }
+                Err(index) => {
+                    let node = Node::new(
                         i == word.len() - 1,
                         if i == word.len() - 1 {
                             Some(word.clone())
                         } else {
                             None
                         },
-                    ),
-                );
+                    );
+                    nodes.insert(index, (c, node));
+                    nodes = &mut nodes[index].1.nodes;
+                }
             }
-            nodes = &mut nodes.get_mut(&c).unwrap().nodes;
         }
     }
 
@@ -64,7 +67,9 @@ impl Trie {
             Some(builder) => {
                 let mut automaton = builder.get(query);
                 let state = automaton.initial_state();
-                Ok(self._search(&self.nodes, &state, &mut automaton))
+                let mut matches = vec![];
+                self._search(&mut matches, &self.nodes, &state, &mut automaton);
+                Ok(matches)
             }
             None => Ok(vec![]),
         }
@@ -74,12 +79,11 @@ impl Trie {
 impl Trie {
     fn _search(
         &self,
-        nodes: &HashMap<char, Node>,
+        matches: &mut Vec<String>,
+        nodes: &Vec<(char, Node)>,
         state: &LevenshteinDfaState,
         automaton: &mut LevenshteinAutomaton,
-    ) -> Vec<String> {
-        let mut matches = vec![];
-
+    ) {
         for (c, node) in nodes.iter() {
             let new_state = automaton.step(*c, &state);
             if !automaton.can_match(&new_state) {
@@ -90,11 +94,7 @@ impl Trie {
                 matches.push(node.word.as_ref().unwrap().clone());
             }
 
-            for w in self._search(&node.nodes, &new_state, automaton).into_iter() {
-                matches.push(w);
-            }
+            self._search(matches, &node.nodes, &new_state, automaton);
         }
-
-        matches
     }
 }
