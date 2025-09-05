@@ -10,12 +10,15 @@ struct State(u32, i32);
 pub struct LevenshteinDfaState {
     offset: u32,
     max_shift: u32,
-    states: Vec<State>,
+    state_id: u32,
 }
 
 struct LevenshteinDfa {
-    dfa:
-        HashMap<u32, HashMap<u16, (u32, u32, u32), BuildNoHashHasher<u16>>, BuildNoHashHasher<u16>>,
+    dfa: HashMap<
+        u32,
+        HashMap<u16, LevenshteinDfaState, BuildNoHashHasher<u16>>,
+        BuildNoHashHasher<u16>,
+    >,
 }
 
 pub struct LevenshteinAutomaton {
@@ -34,35 +37,42 @@ impl LevenshteinDfa {
     fn new(d: u8) -> Self {
         let mut dfa: HashMap<
             u32,
-            HashMap<u16, (u32, u32, u32), BuildNoHashHasher<u16>>,
+            HashMap<u16, LevenshteinDfaState, BuildNoHashHasher<u16>>,
             BuildNoHashHasher<u16>,
         > = HashMap::default();
 
-        let state = Self::initial_state(d);
+        let (_, _, states) = Self::initial_state(d);
         let char_vectors = Self::get_characteristic_vectors(2 * d + 1);
 
+        // map states vector to corresponding numerical id
         let mut states_ids: HashMap<Vec<State>, u32> = HashMap::new();
         dfa.insert(
-            Self::get_states_id(&state.states, &mut states_ids),
+            Self::get_states_id(&states, &mut states_ids),
             HashMap::default(),
         );
-        let mut states_stack = vec![state.states];
+        let mut states_stack = vec![states];
 
         while states_stack.len() > 0 {
             let states = states_stack.pop().unwrap();
-            let mut transitions: HashMap<u16, (u32, u32, u32), BuildNoHashHasher<u16>> =
+            let mut transitions: HashMap<u16, LevenshteinDfaState, BuildNoHashHasher<u16>> =
                 HashMap::default();
+
             for vec in char_vectors.iter() {
-                let next_state = Self::normalize(Self::step(vec, &states));
-                let next_state_id = Self::get_states_id(&next_state.states, &mut states_ids);
+                let (offset, max_shift, next_states) = Self::normalize(Self::step(vec, &states));
+                let next_state_id = Self::get_states_id(&next_states, &mut states_ids);
+
                 if !dfa.contains_key(&next_state_id) {
                     dfa.insert(next_state_id, HashMap::default());
-                    states_stack.push(next_state.states.clone());
+                    states_stack.push(next_states);
                 }
 
                 transitions.insert(
                     Self::vec_to_mask(vec),
-                    (next_state.offset, next_state.max_shift, next_state_id),
+                    LevenshteinDfaState {
+                        offset: offset,
+                        max_shift: max_shift,
+                        state_id: next_state_id,
+                    },
                 );
             }
 
@@ -73,6 +83,8 @@ impl LevenshteinDfa {
     }
 
     fn get_states_id(states: &Vec<State>, states_ids: &mut HashMap<Vec<State>, u32>) -> u32 {
+        // Map vector of states into corresponding numerical id
+
         if states.len() == 0 {
             return 0;
         }
@@ -88,6 +100,8 @@ impl LevenshteinDfa {
     }
 
     fn get_characteristic_vectors(width: u8) -> Vec<Vec<u8>> {
+        // Return all characteristic vectors of width 'width'
+
         fn create(vectors: Vec<Vec<u8>>, depth: u8, max: u8) -> Vec<Vec<u8>> {
             if depth == max {
                 return vectors;
@@ -107,6 +121,8 @@ impl LevenshteinDfa {
     }
 
     fn transitions(vector: &Vec<u8>, state: &State) -> Vec<State> {
+        // Perform all possible state transitions and return them
+
         match &vector[state.0 as usize..vector.len()]
             .iter()
             .position(|x| *x == 1)
@@ -127,12 +143,12 @@ impl LevenshteinDfa {
     }
 
     fn step(vector: &Vec<u8>, states: &Vec<State>) -> Vec<State> {
+        // Perform step from 'states' step for specifiec characteristic vector
+
         let mut next_states: Vec<State> = Vec::new();
 
         for s in states.iter() {
-            let mut transitions: Vec<State> = Self::transitions(&vector, &s);
-            while transitions.len() > 0 {
-                let state = transitions.pop().unwrap();
+            for state in Self::transitions(&vector, &s) {
                 if state.1 >= 0 && !next_states.contains(&state) {
                     next_states.push(state);
                 }
@@ -143,7 +159,8 @@ impl LevenshteinDfa {
     }
 
     fn vec_to_mask(vec: &[u8]) -> u16 {
-        // builds bitmask from binary vector and returns u16
+        // builds bitmask from binary vector
+        // vector is vector of 0 and 1 and can be represented as single numeric value
 
         let mut mask = 0u16;
         for (i, &b) in vec.iter().enumerate() {
@@ -155,17 +172,15 @@ impl LevenshteinDfa {
         mask
     }
 
-    fn initial_state(d: u8) -> LevenshteinDfaState {
+    fn initial_state(d: u8) -> (u32, u32, Vec<State>) {
+        // return offset, max_shift and vector of states
         Self::normalize(vec![State(0, d as i32)])
     }
 
-    fn normalize(states: Vec<State>) -> LevenshteinDfaState {
+    fn normalize(states: Vec<State>) -> (u32, u32, Vec<State>) {
+        // return offset, max_shift and vector of states
         if states.len() == 0 {
-            return LevenshteinDfaState {
-                offset: 0,
-                max_shift: 0,
-                states: Vec::new(),
-            };
+            return (0, 0, Vec::new());
         }
 
         let min_offset =
@@ -191,11 +206,7 @@ impl LevenshteinDfa {
                 }
             });
 
-        LevenshteinDfaState {
-            offset: min_offset,
-            max_shift: max_shift as u32,
-            states: states,
-        }
+        (min_offset, max_shift as u32, states)
     }
 }
 
@@ -209,34 +220,12 @@ impl LevenshteinAutomaton {
         }
     }
 
-    pub fn initial_state(&self) -> (u32, u32, u32) {
-        (0, self.d as u32, 1)
-    }
-
-    pub fn step(&mut self, c: char, state: &(u32, u32, u32)) -> (u32, u32, u32) {
-        let vec = self.get_characteristic_vector(c, state.0);
-
-        match self.dfa.as_ref().dfa.get(&state.2) {
-            Some(transitions) => match transitions.get(&vec) {
-                Some(next_state) => (state.0 + next_state.0, next_state.1, next_state.2),
-                None => (0, 0, 0),
-            },
-            _ => (0, 0, 0),
-        }
-    }
-
-    pub fn is_match(&self, state: &(u32, u32, u32)) -> bool {
-        self.query.len() as i32 - state.0 as i32 <= state.1 as i32
-    }
-
-    pub fn can_match(&self, state: &(u32, u32, u32)) -> bool {
-        state.2 != 0
-    }
-
     fn create_characteristic_vector_cache(
         query: &str,
         d: u8,
     ) -> HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>> {
+        // Creates cache of vector bit maps, maps character and specific offset to corresponding vector bitmap
+
         let mut cache: HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>> = HashMap::default();
         for c in query.chars() {
             let mut char_vec: Vec<u8> = query
@@ -271,7 +260,51 @@ impl LevenshteinAutomaton {
         cache
     }
 
+    pub fn initial_state(&self) -> LevenshteinDfaState {
+        // returns starting state
+        LevenshteinDfaState {
+            offset: 0,
+            max_shift: self.d as u32,
+            state_id: 1,
+        }
+    }
+
+    pub fn step(&mut self, c: char, state: &LevenshteinDfaState) -> LevenshteinDfaState {
+        // performs single automaton step
+        let vec = self.get_characteristic_vector(c, state.offset);
+
+        match self.dfa.as_ref().dfa.get(&state.state_id) {
+            Some(transitions) => match transitions.get(&vec) {
+                Some(next_state) => LevenshteinDfaState {
+                    offset: state.offset + next_state.offset,
+                    max_shift: next_state.max_shift,
+                    state_id: next_state.state_id,
+                },
+                None => LevenshteinDfaState {
+                    offset: 0,
+                    max_shift: 0,
+                    state_id: 0,
+                },
+            },
+            _ => LevenshteinDfaState {
+                offset: 0,
+                max_shift: 0,
+                state_id: 0,
+            },
+        }
+    }
+
+    pub fn is_match(&self, state: &LevenshteinDfaState) -> bool {
+        self.query.len() as i32 - state.offset as i32 <= state.max_shift as i32
+    }
+
+    pub fn can_match(&self, state: &LevenshteinDfaState) -> bool {
+        state.state_id != 0
+    }
+
     fn get_characteristic_vector(&self, c: char, offset: u32) -> u16 {
+        // return charactaristic vector for specific character and offset
+
         match self.characteristic_vector_cache.get(&(c as usize)) {
             Some(vec_masks) => return vec_masks[offset as usize],
             None => return 0,

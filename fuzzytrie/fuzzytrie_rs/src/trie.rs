@@ -1,4 +1,4 @@
-use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonBuilder};
+use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonBuilder, LevenshteinDfaState};
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
@@ -7,8 +7,8 @@ struct Node {
     nodes: Vec<(char, Node)>,
 }
 
-#[pyclass(name = "Trie")]
-pub struct Trie {
+#[pyclass(name = "FuzzyTrie")]
+pub struct FuzzyTrie {
     automaton_builders: HashMap<u8, LevenshteinAutomatonBuilder>,
     nodes: Vec<(char, Node)>,
 }
@@ -23,7 +23,7 @@ impl Node {
 }
 
 #[pymethods]
-impl Trie {
+impl FuzzyTrie {
     #[new]
     fn new() -> Self {
         Self {
@@ -74,13 +74,13 @@ impl Trie {
     }
 }
 
-impl Trie {
+impl FuzzyTrie {
     fn _search(
         &self,
         prefix: &mut String,
         matches: &mut Vec<String>,
         nodes: &Vec<(char, Node)>,
-        state: &(u32, u32, u32),
+        state: &LevenshteinDfaState,
         automaton: &mut LevenshteinAutomaton,
     ) {
         for (c, node) in nodes.iter() {
