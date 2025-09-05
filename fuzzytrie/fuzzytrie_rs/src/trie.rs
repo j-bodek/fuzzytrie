@@ -58,7 +58,16 @@ impl Trie {
             Some(builder) => {
                 let mut automaton = builder.get(query);
                 let state = automaton.initial_state();
-                Ok(self._search(&self.nodes, &state, &mut automaton))
+                let mut prefix = String::new();
+                let mut matches = Vec::new();
+                self._search(
+                    &mut prefix,
+                    &mut matches,
+                    &self.nodes,
+                    &state,
+                    &mut automaton,
+                );
+                Ok(matches)
             }
             None => Ok(vec![]),
         }
@@ -68,27 +77,33 @@ impl Trie {
 impl Trie {
     fn _search(
         &self,
+        prefix: &mut String,
+        matches: &mut Vec<String>,
         nodes: &Vec<(char, Node)>,
-        state: &LevenshteinDfaState,
+        state: &(u32, u32, u32),
         automaton: &mut LevenshteinAutomaton,
-    ) -> Vec<String> {
-        let mut matches: Vec<String> = vec![];
+    ) {
         for (c, node) in nodes.iter() {
             let new_state = automaton.step(*c, &state);
+            // println!(
+            //     "{}, {:?}, {}, {}",
+            //     c,
+            //     new_state,
+            //     automaton.can_match(&new_state),
+            //     automaton.is_match(&new_state)
+            // );
+
             if !automaton.can_match(&new_state) {
                 continue;
             }
 
+            prefix.push(*c);
             if node.is_word && automaton.is_match(&new_state) {
-                matches.push(c.to_string());
+                matches.push(prefix.clone());
             }
 
-            for mut m in self._search(&node.nodes, &new_state, automaton) {
-                m.insert(0, *c);
-                matches.push(m);
-            }
+            self._search(prefix, matches, &node.nodes, &new_state, automaton);
+            prefix.pop();
         }
-
-        matches
     }
 }
