@@ -18,11 +18,8 @@ def timeit(func, **kwargs):
     return t, output
 
 
-def automaton_matches(query, builder, trie):
-
-    automaton = builder.get(query)
-    matches = list(trie.fuzzy_search(automaton))
-    return sorted(matches)
+def automaton_rs_matches(d, query, trie):
+    return trie.search(d, query)
 
 
 def brute_force_matches(query, words, d):
