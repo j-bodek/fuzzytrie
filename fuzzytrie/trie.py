@@ -63,7 +63,6 @@ class Trie:
     ):
         for char, node in nodes.items():
             new_state = automaton.step(char, state)
-            # print(char, new_state)
             if not automaton.can_match(new_state):
                 continue
 
