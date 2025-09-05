@@ -22,7 +22,7 @@ struct LevenshteinDfa {
 }
 
 pub struct LevenshteinAutomaton {
-    query: String,
+    query_len: u32,
     d: u8,
     dfa: Arc<LevenshteinDfa>,
     characteristic_vector_cache: HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>>,
@@ -214,7 +214,7 @@ impl LevenshteinAutomaton {
     fn new(query: String, d: u8, dfa: Arc<LevenshteinDfa>) -> Self {
         Self {
             characteristic_vector_cache: Self::create_characteristic_vector_cache(&query, d),
-            query: query,
+            query_len: query.chars().count() as u32,
             d: d,
             dfa: dfa,
         }
@@ -295,7 +295,7 @@ impl LevenshteinAutomaton {
     }
 
     pub fn is_match(&self, state: &LevenshteinDfaState) -> bool {
-        self.query.len() as i32 - state.offset as i32 <= state.max_shift as i32
+        self.query_len as i32 - state.offset as i32 <= state.max_shift as i32
     }
 
     pub fn can_match(&self, state: &LevenshteinDfaState) -> bool {

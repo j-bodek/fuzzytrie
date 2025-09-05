@@ -39,13 +39,18 @@ impl FuzzyTrie {
 
     fn add(&mut self, word: String) {
         let mut nodes = &mut self.nodes;
+        let len = word.chars().count();
+
         for (i, c) in word.chars().enumerate() {
             match nodes.binary_search_by(|t| t.0.cmp(&c)) {
                 Ok(index) => {
+                    if i == len - 1 {
+                        nodes[index].1.is_word = true;
+                    }
                     nodes = &mut nodes[index].1.nodes;
                 }
                 Err(index) => {
-                    let node = Node::new(i == word.len() - 1);
+                    let node = Node::new(i == len - 1);
                     nodes.insert(index, (c, node));
                     nodes = &mut nodes[index].1.nodes;
                 }
