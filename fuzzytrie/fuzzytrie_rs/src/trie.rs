@@ -58,6 +58,11 @@ impl FuzzyTrie {
         }
     }
 
+    fn delete(&mut self, word: String) {
+        let mut chars: Vec<char> = word.chars().rev().collect();
+        Self::_delete(&mut chars, &mut self.nodes);
+    }
+
     fn search(&self, d: u8, query: String) -> PyResult<Vec<String>> {
         match self.automaton_builders.get(&d) {
             Some(builder) => {
@@ -80,6 +85,30 @@ impl FuzzyTrie {
 }
 
 impl FuzzyTrie {
+    fn _delete(chars: &mut Vec<char>, nodes: &mut Vec<(char, Node)>) -> (bool, bool) {
+        if chars.len() == 0 {
+            return (true, true);
+        }
+
+        if let Ok(index) = nodes.binary_search_by(|t| t.0.cmp(&chars[chars.len() - 1])) {
+            chars.pop();
+
+            if chars.len() == 0 {
+                nodes[index].1.is_word = false;
+                return (nodes[index].1.nodes.len() == 0, true);
+            } else {
+                let (can_remove, deleted) = Self::_delete(chars, &mut nodes[index].1.nodes);
+                if can_remove && nodes[index].1.nodes.len() == 1 {
+                    nodes[index].1.nodes.pop();
+                    return (true, deleted);
+                }
+                return (false, deleted);
+            }
+        }
+
+        return (false, false);
+    }
+
     fn _search(
         &self,
         prefix: &mut String,

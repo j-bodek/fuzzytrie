@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec::Vec;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
 struct State(u32, i32);
 
 pub struct LevenshteinDfaState {
