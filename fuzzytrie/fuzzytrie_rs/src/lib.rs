@@ -1,7 +1,6 @@
 pub mod automaton;
 pub mod trie;
 
-// use crate::automaton::LevenshteinAutomatonBuilder;
 use crate::trie::Trie;
 use pyo3::prelude::*;
 

@@ -1,4 +1,4 @@
-use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonBuilder, LevenshteinDfaState};
+use crate::automaton::{LevenshteinAutomaton, LevenshteinAutomatonBuilder};
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
@@ -85,14 +85,6 @@ impl Trie {
     ) {
         for (c, node) in nodes.iter() {
             let new_state = automaton.step(*c, &state);
-            // println!(
-            //     "{}, {:?}, {}, {}",
-            //     c,
-            //     new_state,
-            //     automaton.can_match(&new_state),
-            //     automaton.is_match(&new_state)
-            // );
-
             if !automaton.can_match(&new_state) {
                 continue;
             }

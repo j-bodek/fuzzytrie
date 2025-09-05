@@ -1,4 +1,5 @@
 use nohash_hasher::BuildNoHashHasher;
+use std::cmp;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -21,8 +22,7 @@ pub struct LevenshteinAutomaton {
     query: String,
     d: u8,
     dfa: Arc<LevenshteinDfa>,
-    empty_vector: Vec<u8>,
-    characteristic_vector_cache: HashMap<char, Vec<u8>>,
+    characteristic_vector_cache: HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>>,
 }
 
 pub struct LevenshteinAutomatonBuilder {
@@ -201,37 +201,23 @@ impl LevenshteinDfa {
 
 impl LevenshteinAutomaton {
     fn new(query: String, d: u8, dfa: Arc<LevenshteinDfa>) -> Self {
-        let mut cache = HashMap::new();
-        for c in query.chars() {
-            let mut char_vec: Vec<u8> = query
-                .chars()
-                .map(|ch| if ch == c { 1 } else { 0 })
-                .collect();
-            // create bitmask for vectors
-            char_vec.append(&mut vec![0; 2 * d as usize + 1]);
-
-            cache.insert(c, char_vec);
-        }
         Self {
+            characteristic_vector_cache: Self::create_characteristic_vector_cache(&query, d),
             query: query,
             d: d,
             dfa: dfa,
-            empty_vector: vec![0; d as usize * 2 + 1],
-            characteristic_vector_cache: cache,
         }
     }
 
     pub fn initial_state(&self) -> (u32, u32, u32) {
         (0, self.d as u32, 1)
-        // LevenshteinDfa::initial_state(self.d)
     }
 
     pub fn step(&mut self, c: char, state: &(u32, u32, u32)) -> (u32, u32, u32) {
-        // self.create_characteristic_vector(c);
         let vec = self.get_characteristic_vector(c, state.0);
 
         match self.dfa.as_ref().dfa.get(&state.2) {
-            Some(transitions) => match transitions.get(&LevenshteinDfa::vec_to_mask(vec)) {
+            Some(transitions) => match transitions.get(&vec) {
                 Some(next_state) => (state.0 + next_state.0, next_state.1, next_state.2),
                 None => (0, 0, 0),
             },
@@ -240,28 +226,55 @@ impl LevenshteinAutomaton {
     }
 
     pub fn is_match(&self, state: &(u32, u32, u32)) -> bool {
-        // self.query.len() as i32 - state.offset as i32 <= state.max_shift as i32
         self.query.len() as i32 - state.0 as i32 <= state.1 as i32
     }
 
     pub fn can_match(&self, state: &(u32, u32, u32)) -> bool {
-        // state.states.len() > 0
         state.2 != 0
     }
 
-    // fn create_characteristic_vector(&mut self, c: char) {
-    //     if !self.characteristic_vector_cache.contains_key(&c) && self.query.contains(c) {
-    //         let mut char_vec: Vec<bool> = self.query.chars().map(|ch| ch == c).collect();
-    //         char_vec.append(&mut vec![false; 2 * self.d as usize + 1]);
+    fn create_characteristic_vector_cache(
+        query: &str,
+        d: u8,
+    ) -> HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>> {
+        let mut cache: HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>> = HashMap::default();
+        for c in query.chars() {
+            let mut char_vec: Vec<u8> = query
+                .chars()
+                .map(|ch| if ch == c { 1 } else { 0 })
+                .collect();
+            // create bitmask for vectors
+            char_vec.append(&mut vec![0; 2 * d as usize + 1]);
 
-    //         self.characteristic_vector_cache.insert(c, char_vec);
-    //     };
-    // }
+            let mut char_vec_masks: Vec<u16> = vec![];
+            let mut mask = 0u16;
+            let window = (2 * d + 1) as usize;
 
-    fn get_characteristic_vector(&self, c: char, offset: u32) -> &[u8] {
-        match self.characteristic_vector_cache.get(&c) {
-            Some(vec) => return &vec[offset as usize..(offset + 2 * self.d as u32 + 1) as usize],
-            None => return &self.empty_vector[..],
+            for (i, &b) in char_vec.iter().enumerate() {
+                if i + 1 > window {
+                    // shift bits to right
+                    mask = mask >> 1;
+                }
+
+                if b != 0 {
+                    mask |= 1 << cmp::min(window - 1, i);
+                }
+
+                if i + 1 >= window {
+                    char_vec_masks.push(mask);
+                }
+            }
+
+            cache.insert(c as usize, char_vec_masks);
+        }
+
+        cache
+    }
+
+    fn get_characteristic_vector(&self, c: char, offset: u32) -> u16 {
+        match self.characteristic_vector_cache.get(&(c as usize)) {
+            Some(vec_masks) => return vec_masks[offset as usize],
+            None => return 0,
         }
     }
 }
