@@ -21,7 +21,7 @@ def queries():
 
 
 def test_automaton(queries, words):
-    distances = [0, 1, 2, 3]
+    distances = [1, 2, 3]
 
     t_rs = FuzzyTrie()
 
@@ -53,6 +53,6 @@ def test_automaton(queries, words):
             ), f"Returned matches differ d: {d}, query: {q}, automaton matches: {a_matches}, brute force matches: {bf_matches}"
 
         print(
-            f"\nAverage time of levenshtein automaton search with d={d} {_time1 / len(queries)}"
-            f"\nAverage time of brute force search with d={d} {_time2 / len(queries)}"
+            f"\nAverage time of levenshtein automaton search with d={d} {_time1 / len(batch)}"
+            f"\nAverage time of brute force search with d={d} {_time2 / len(batch)}"
         )
