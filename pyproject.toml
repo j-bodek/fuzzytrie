@@ -4,12 +4,14 @@ build-backend = "maturin"
 
 [project]
 name = "fuzzytrie"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+readme = "README.md"
 [tool.maturin]
 features = ["pyo3/extension-module"]
+manifest-path = "fuzzytrie/Cargo.toml"
