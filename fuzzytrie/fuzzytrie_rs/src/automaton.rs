@@ -16,8 +16,8 @@ pub struct LevenshteinDfaState {
 struct LevenshteinDfa {
     dfa: HashMap<
         u32,
-        HashMap<u16, LevenshteinDfaState, BuildNoHashHasher<u16>>,
-        BuildNoHashHasher<u16>,
+        HashMap<u32, LevenshteinDfaState, BuildNoHashHasher<u32>>,
+        BuildNoHashHasher<u32>,
     >,
 }
 
@@ -25,7 +25,7 @@ pub struct LevenshteinAutomaton {
     query_len: u32,
     d: u8,
     dfa: Arc<LevenshteinDfa>,
-    characteristic_vector_cache: HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>>,
+    characteristic_vector_cache: HashMap<usize, Vec<u32>, BuildNoHashHasher<usize>>,
 }
 
 pub struct LevenshteinAutomatonBuilder {
@@ -37,8 +37,8 @@ impl LevenshteinDfa {
     fn new(d: u8) -> Self {
         let mut dfa: HashMap<
             u32,
-            HashMap<u16, LevenshteinDfaState, BuildNoHashHasher<u16>>,
-            BuildNoHashHasher<u16>,
+            HashMap<u32, LevenshteinDfaState, BuildNoHashHasher<u32>>,
+            BuildNoHashHasher<u32>,
         > = HashMap::default();
 
         let (_, _, states) = Self::initial_state(d);
@@ -54,7 +54,7 @@ impl LevenshteinDfa {
 
         while states_stack.len() > 0 {
             let states = states_stack.pop().unwrap();
-            let mut transitions: HashMap<u16, LevenshteinDfaState, BuildNoHashHasher<u16>> =
+            let mut transitions: HashMap<u32, LevenshteinDfaState, BuildNoHashHasher<u32>> =
                 HashMap::default();
 
             for vec in char_vectors.iter() {
@@ -158,11 +158,11 @@ impl LevenshteinDfa {
         next_states
     }
 
-    fn vec_to_mask(vec: &[u8]) -> u16 {
+    fn vec_to_mask(vec: &[u8]) -> u32 {
         // builds bitmask from binary vector
         // vector is vector of 0 and 1 and can be represented as single numeric value
 
-        let mut mask = 0u16;
+        let mut mask = 0u32;
         for (i, &b) in vec.iter().enumerate() {
             if b != 0 {
                 mask |= 1 << i;
@@ -223,10 +223,10 @@ impl LevenshteinAutomaton {
     fn create_characteristic_vector_cache(
         query: &str,
         d: u8,
-    ) -> HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>> {
+    ) -> HashMap<usize, Vec<u32>, BuildNoHashHasher<usize>> {
         // Creates cache of vector bit maps, maps character and specific offset to corresponding vector bitmap
 
-        let mut cache: HashMap<usize, Vec<u16>, BuildNoHashHasher<usize>> = HashMap::default();
+        let mut cache: HashMap<usize, Vec<u32>, BuildNoHashHasher<usize>> = HashMap::default();
         for c in query.chars() {
             let mut char_vec: Vec<u8> = query
                 .chars()
@@ -235,8 +235,8 @@ impl LevenshteinAutomaton {
             // create bitmask for vectors
             char_vec.append(&mut vec![0; 2 * d as usize + 1]);
 
-            let mut char_vec_masks: Vec<u16> = vec![];
-            let mut mask = 0u16;
+            let mut char_vec_masks: Vec<u32> = vec![];
+            let mut mask = 0u32;
             let window = (2 * d + 1) as usize;
 
             for (i, &b) in char_vec.iter().enumerate() {
@@ -302,7 +302,7 @@ impl LevenshteinAutomaton {
         state.state_id != 0
     }
 
-    fn get_characteristic_vector(&self, c: char, offset: u32) -> u16 {
+    fn get_characteristic_vector(&self, c: char, offset: u32) -> u32 {
         // return charactaristic vector for specific character and offset
 
         match self.characteristic_vector_cache.get(&(c as usize)) {
