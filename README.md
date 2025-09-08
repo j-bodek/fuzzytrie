@@ -36,8 +36,8 @@ print(t.search(query="levenshtein", d=1))
 Benchmarks were run on a dataset of ~460k words with 500 sample queries for each distance. Results were compared against a brute-force implementation (Levenshtein distance in C from [rapidfuzz/Levenshtein](https://github.com/rapidfuzz/Levenshtein "library"))
 
 
-Distance |Automaton init time (s) | Avg. FuzzyTrie search (s) | Avg. brute force search (s) | Speedup
---- | --- | --- | --- |--- |--- |--- |--- |--- |--- |--- |---
-1 | ~3.29e-05 | ~0.00046 | ~0.14 | 306x
-2 | ~0.000608 | ~0.00167 | ~0.14 | 84x
-3 | ~0.053419 | ~0.00502 | ~0.14 | 27x
+| Distance | Automaton init time (s) | Avg. FuzzyTrie search (s) | Avg. brute force search (s) | Speedup |
+| --- |:---:|:---:|:---:|:---|
+| 1 | ~3.29e-05 | ~0.00046 | ~0.14 | 306x |
+| 2 | ~0.000608 | ~0.00167 | ~0.14 | 84x |
+| 3 | ~0.053419 | ~0.00502 | ~0.14 | 27x |
