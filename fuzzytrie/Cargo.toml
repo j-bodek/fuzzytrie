@@ -1,11 +1,11 @@
 [package]
-name = "fuzzytrie_rs"
+name = "fuzzytrie"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "fuzzytrie_rs"
+name = "fuzzytrie"
 crate-type = ["cdylib"]
 
 [dependencies]

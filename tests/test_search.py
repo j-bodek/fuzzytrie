@@ -7,7 +7,7 @@ from helpers.search import (
     automaton_rs_matches,
     brute_force_matches,
 )
-from fuzzytrie_rs import FuzzyTrie
+from fuzzytrie import FuzzyTrie
 
 
 @pytest.fixture
