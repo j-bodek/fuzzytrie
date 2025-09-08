@@ -41,3 +41,7 @@ Benchmarks were run on a dataset of ~460k words with 500 sample queries for each
 | 1 | ~3.29e-05 | ~0.00046 | ~0.14 | 306x |
 | 2 | ~0.000608 | ~0.00167 | ~0.14 | 84x |
 | 3 | ~0.053419 | ~0.00502 | ~0.14 | 27x |
+
+
+### Theory of operation
+Brief explaination of how this works internally can be found [here](/docs/howitworks.md "here")
