@@ -10,15 +10,16 @@ struct State(u32, i32);
 pub struct LevenshteinDfaState {
     offset: u32,
     max_shift: u32,
-    states: Vec<State>,
+    state_id: u32,
 }
 
 struct LevenshteinDfa {
     dfa: HashMap<
-        Vec<State>,
+        u32,
         HashMap<u32, LevenshteinDfaState, BuildNoHashHasher<u32>>,
         BuildNoHashHasher<u32>,
     >,
+    states: HashMap<u32, Vec<State>, BuildNoHashHasher<u32>>,
 }
 
 pub struct LevenshteinAutomaton {
@@ -36,16 +37,21 @@ pub struct LevenshteinAutomatonBuilder {
 impl LevenshteinDfa {
     fn new(d: u8) -> Self {
         let mut dfa: HashMap<
-            Vec<State>,
+            u32,
             HashMap<u32, LevenshteinDfaState, BuildNoHashHasher<u32>>,
             BuildNoHashHasher<u32>,
         > = HashMap::default();
+        let mut states_map: HashMap<u32, Vec<State>, BuildNoHashHasher<u32>> = HashMap::default();
 
         let (_, _, states) = Self::initial_state(d);
         let char_vectors = Self::get_characteristic_vectors(2 * d + 1);
 
         // map states vector to corresponding numerical id
-        dfa.insert(states.clone(), HashMap::default());
+        let mut states_ids: HashMap<Vec<State>, u32> = HashMap::new();
+        let state_id = Self::get_states_id(&states, &mut states_ids);
+        dfa.insert(state_id, HashMap::default());
+        states_map.insert(state_id, states.clone());
+
         let mut states_stack = vec![states];
 
         while states_stack.len() > 0 {
@@ -55,10 +61,11 @@ impl LevenshteinDfa {
 
             for vec in char_vectors.iter() {
                 let (offset, max_shift, next_states) = Self::normalize(Self::step(vec, &states));
+                let next_state_id = Self::get_states_id(&next_states, &mut states_ids);
 
-                if !dfa.contains_key(&next_states) {
-                    dfa.insert(next_states.clone(), HashMap::default());
-                    states_stack.push(next_states.clone());
+                if !dfa.contains_key(&next_state_id) {
+                    dfa.insert(next_state_id, HashMap::default());
+                    states_stack.push(next_states);
                 }
 
                 transitions.insert(
@@ -66,15 +73,37 @@ impl LevenshteinDfa {
                     LevenshteinDfaState {
                         offset: offset,
                         max_shift: max_shift,
-                        states: next_states,
+                        state_id: next_state_id,
                     },
                 );
             }
 
-            dfa.insert(states, transitions);
+            let state_id = Self::get_states_id(&states, &mut states_ids);
+            dfa.insert(state_id, transitions);
+            states_map.insert(state_id, states);
         }
 
-        Self { dfa: dfa }
+        Self {
+            dfa: dfa,
+            states: states_map,
+        }
+    }
+
+    fn get_states_id(states: &Vec<State>, states_ids: &mut HashMap<Vec<State>, u32>) -> u32 {
+        // Map vector of states into corresponding numerical id
+
+        if states.len() == 0 {
+            return 0;
+        }
+
+        match states_ids.get(states) {
+            Some(id) => *id,
+            None => {
+                let id = (states_ids.len() + 1) as u32;
+                states_ids.insert(states.clone(), id);
+                id
+            }
+        }
     }
 
     fn get_characteristic_vectors(width: u8) -> Vec<Vec<u8>> {
@@ -243,7 +272,7 @@ impl LevenshteinAutomaton {
         LevenshteinDfaState {
             offset: 0,
             max_shift: self.d as u32,
-            states: vec![State(0, self.d as i32)],
+            state_id: 1,
         }
     }
 
@@ -251,23 +280,23 @@ impl LevenshteinAutomaton {
         // performs single automaton step
         let vec = self.get_characteristic_vector(c, state.offset);
 
-        match self.dfa.as_ref().dfa.get(&state.states) {
+        match self.dfa.as_ref().dfa.get(&state.state_id) {
             Some(transitions) => match transitions.get(&vec) {
                 Some(next_state) => LevenshteinDfaState {
                     offset: state.offset + next_state.offset,
                     max_shift: next_state.max_shift,
-                    states: next_state.states.clone(),
+                    state_id: next_state.state_id,
                 },
                 None => LevenshteinDfaState {
                     offset: 0,
                     max_shift: 0,
-                    states: vec![],
+                    state_id: 0,
                 },
             },
             _ => LevenshteinDfaState {
                 offset: 0,
                 max_shift: 0,
-                states: vec![],
+                state_id: 0,
             },
         }
     }
@@ -277,22 +306,26 @@ impl LevenshteinAutomaton {
     }
 
     pub fn can_match(&self, state: &LevenshteinDfaState) -> bool {
-        state.states.len() > 0
+        state.state_id != 0
     }
 
     pub fn distance(&self, state: &LevenshteinDfaState) -> u16 {
-        state
-            .states
-            .iter()
-            .map(|s| {
-                self.d as i32 - s.1 as i32
-                    + cmp::max(0, self.query_len as i32 - state.offset as i32 - s.0 as i32)
-            })
-            .fold(
-                // distance is only called on matched words so it's save to use 'd' as upper bound
-                self.d as u16,
-                |d1, d2| if d1 < d2 as u16 { d1 } else { d2 as u16 },
-            )
+        match self.dfa.as_ref().states.get(&state.state_id) {
+            Some(states) => {
+                states
+                    .iter()
+                    .map(|s| {
+                        self.d as i32 - s.1 as i32
+                            + cmp::max(0, self.query_len as i32 - state.offset as i32 - s.0 as i32)
+                    })
+                    .fold(
+                        // distance is only called on matched words so it's save to use 'd' as upper bound
+                        self.d as u16,
+                        |d1, d2| if d1 < d2 as u16 { d1 } else { d2 as u16 },
+                    )
+            }
+            _ => self.query_len as u16,
+        }
     }
 
     fn get_characteristic_vector(&self, c: char, offset: u32) -> u32 {
