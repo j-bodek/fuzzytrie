@@ -18,9 +18,10 @@ for w in ["lavanshtain", "levanshtain", "levenshtain"]:
 
 # Perform fuzzy searches with different maximum distances
 print(t.search(query="levenshtein", d=2))
-# >> ['levanshtain', 'levenshtain']
+# Returns list of distances between query and element, and elements
+# >> [(2, 'levanshtain'), (1, 'levenshtain')]
 print(t.search(query="levenshtein", d=1))
-# >> ['levenshtain']
+# >> [(1, 'levenshtain')]
 ```
 
 
