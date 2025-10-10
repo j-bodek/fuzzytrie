@@ -26,7 +26,7 @@ def brute_force_matches(query, words, d):
     matches = []
 
     for w in words:
-        if distance(w, query) <= d:
-            matches.append(w)
+        if (dis := distance(w, query)) <= d:
+            matches.append((dis, w))
 
     return sorted(matches)
