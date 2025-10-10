@@ -63,7 +63,7 @@ impl FuzzyTrie {
         Self::_delete(&mut chars, &mut self.nodes);
     }
 
-    fn search(&self, d: u8, query: String) -> PyResult<Vec<String>> {
+    fn search(&self, d: u8, query: String) -> PyResult<Vec<(u16, String)>> {
         match self.automaton_builders.get(&d) {
             Some(builder) => {
                 let mut automaton = builder.get(query);
@@ -112,7 +112,7 @@ impl FuzzyTrie {
     fn _search(
         &self,
         prefix: &mut String,
-        matches: &mut Vec<String>,
+        matches: &mut Vec<(u16, String)>,
         nodes: &Vec<(char, Node)>,
         state: &LevenshteinDfaState,
         automaton: &mut LevenshteinAutomaton,
@@ -125,7 +125,7 @@ impl FuzzyTrie {
 
             prefix.push(*c);
             if node.is_word && automaton.is_match(&new_state) {
-                matches.push(prefix.clone());
+                matches.push((automaton.distance(&new_state), prefix.clone()));
             }
 
             self._search(prefix, matches, &node.nodes, &new_state, automaton);
